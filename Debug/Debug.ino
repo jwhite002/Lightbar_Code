@@ -1,60 +1,108 @@
-// A basic everyday NeoPixel strip test program.
-
-// NEOPIXEL BEST PRACTICES for most reliable operation:
-// - Add 1000 uF CAPACITOR between NeoPixel strip's + and - connections.
-// - MINIMIZE WIRING LENGTH between microcontroller board and first pixel.
-// - NeoPixel strip's DATA-IN should pass through a 300-500 OHM RESISTOR.
-// - AVOID connecting NeoPixels on a LIVE CIRCUIT. If you must, ALWAYS
-//   connect GROUND (-) first, then +, then data.
-// - When using a 3.3V microcontroller with a 5V-powered NeoPixel strip,
-//   a LOGIC-LEVEL CONVERTER on the data line is STRONGLY RECOMMENDED.
-// (Skipping these may work OK on your workbench but can fail in the field)
-
 #include <Adafruit_NeoPixel.h>
+#include <millisDelay.h>
+
 #ifdef __AVR__
  #include <avr/power.h> // Required for 16 MHz Adafruit Trinket
 #endif
 
-// Which pin on the Arduino is connected to the NeoPixels?
-// On a Trinket or Gemma we suggest changing this to 1:
 #define LED_PIN    9
+#define LED_COUNT 7
 
-// How many NeoPixels are attached to the Arduino?
-#define LED_COUNT 1
-
-// Declare our NeoPixel strip object:
 Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
-// Argument 1 = Number of pixels in NeoPixel strip
-// Argument 2 = Arduino pin number (most are valid)
-// Argument 3 = Pixel type flags, add together as needed:
-//   NEO_KHZ800  800 KHz bitstream (most NeoPixel products w/WS2812 LEDs)
-//   NEO_KHZ400  400 KHz (classic 'v1' (not v2) FLORA pixels, WS2811 drivers)
-//   NEO_GRB     Pixels are wired for GRB bitstream (most NeoPixel products)
-//   NEO_RGB     Pixels are wired for RGB bitstream (v1 FLORA pixels, not v2)
-//   NEO_RGBW    Pixels are wired for RGBW bitstream (NeoPixel RGBW products)
+double hue = (42.0/360.0)*65536.0;
+int hue_conv = (int)hue;
 
+enum LED_STATE {
+  RISE, 
+  ON_MAX, 
+  FALL, 
+  ON_MIN
+};
 
-// setup() function -- runs once at startup --------------------------------
+class LedControl {
+private:
+    int ledNum;
+    int maxBrightness;
+    int minBrightness;
+    millisDelay pulseDelay;
+    millisDelay onMaxDelay;
+    millisDelay onMinDelay;
+    LED_STATE ledState;
+    int currentBrightness;
+    int stepDelay; // Delay for each individual brightness step
+  
+public:
+    LedControl(int n, int brightness_max, int brightness_min, int delay_on, int delay_off, int delay_pulse, int start_brightness)
+      : ledNum(n), maxBrightness(brightness_max), minBrightness(brightness_min), ledState(RISE), currentBrightness(start_brightness) {
+        
+        int totalSteps = maxBrightness - minBrightness; // Calculate total number of brightness steps
+        stepDelay = delay_pulse / totalSteps;           // Calculate delay for each step
+        
+        pulseDelay.start(stepDelay);                    // Initialize pulseDelay with stepDelay
+        onMaxDelay.start(delay_on);
+        onMinDelay.start(delay_off);
+    }
+
+    void update() {
+        switch(ledState) {
+            case RISE:
+                if(pulseDelay.justFinished()) {
+                    currentBrightness++;
+                    if(currentBrightness >= maxBrightness) {
+                        currentBrightness = maxBrightness;
+                        ledState = ON_MAX;
+                        onMaxDelay.restart();
+                    }
+                    pulseDelay.start(stepDelay); // Restart with stepDelay
+                }
+                break;
+            case ON_MAX:
+                if(onMaxDelay.justFinished()) {
+                    ledState = FALL;
+                }
+                break;
+            case FALL:
+                if(pulseDelay.justFinished()) {
+                    currentBrightness--;
+                    if(currentBrightness <= minBrightness) {
+                        currentBrightness = minBrightness;
+                        ledState = ON_MIN;
+                        onMinDelay.restart();
+                    }
+                    pulseDelay.start(stepDelay); // Restart with stepDelay
+                }
+                break;
+            case ON_MIN:
+                if(onMinDelay.justFinished()) {
+                    ledState = RISE;
+                }
+                break;
+        }
+
+        uint32_t color = strip.gamma32(strip.ColorHSV(hue_conv, 255, currentBrightness));
+        strip.setPixelColor(ledNum, color);
+    }
+};
+
+#define NUM_LEDS 4
+LedControl leds[NUM_LEDS] = {
+    LedControl(0, 255, 0, 133, 400, 133, 0),
+    LedControl(1, 255, 0, 133, 267, 100, 0),
+    LedControl(2, 255, 0, 100, 167, 67, 0),
+    LedControl(3, 255, 50, 67, 233, 233, 0)
+    // LedControl(4, 255, 0, 100, 100, 10, 255),
+    // LedControl(5, 255, 0, 100, 100, 10, 255),
+    // LedControl(6, 255, 0, 100, 100, 10, 255)
+};
 
 void setup() {
-  // These lines are specifically to support the Adafruit Trinket 5V 16 MHz.
-  // Any other board, you can remove this part (but no harm leaving it):
-#if defined(__AVR_ATtiny85__) && (F_CPU == 16000000)
-  clock_prescale_set(clock_div_1);
-#endif
-  // END of Trinket-specific code.
-
-  strip.begin();           // INITIALIZE NeoPixel strip object (REQUIRED)
-  strip.show();            // Turn OFF all pixels ASAP
-  strip.setBrightness(50); // Set BRIGHTNESS to about 1/5 (max = 255)
-
-  strip.setPixelColor(0, 255, 100, 0);
-  strip.show();
+    strip.begin();
+    strip.show();
 }
 
-
-// loop() function -- runs repeatedly as long as board is on ---------------
-
 void loop() {
-  
+    for(int i = 0; i < NUM_LEDS; i++) {
+        leds[i].update();
+    }
+    strip.show();
 }
