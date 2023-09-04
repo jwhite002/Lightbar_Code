@@ -1,5 +1,5 @@
 {
     "board": "adafruit:avr:itsybitsy32u4_5V",
-    "port": "COM3",
-    "sketch": "Debug\\Debug.ino"
+    "port": "COM5",
+    "sketch": "Lightbar_Code.ino"
 }
