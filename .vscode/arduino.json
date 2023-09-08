@@ -1,5 +1,6 @@
 {
-    "board": "adafruit:avr:itsybitsy32u4_5V",
-    "port": "COM5",
-    "sketch": "Lightbar_Code.ino"
+    "board": "arduino:avr:mega",
+    "port": "COM7",
+    "sketch": "Lightbar_Code.ino",
+    "configuration": "cpu=atmega2560"
 }

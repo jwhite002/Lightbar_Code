@@ -4,14 +4,18 @@
 #include <Adafruit_NeoPixel.h>
 #include <millisDelay.h>
 
+// define and declare all strips to be used
+Adafruit_NeoPixel strips[4] = {
+    Adafruit_NeoPixel(4, 5, NEO_GRB + NEO_KHZ800), // driver side headlight
+    Adafruit_NeoPixel(4, 9, NEO_GRB + NEO_KHZ800), // passenger side headlight
+    Adafruit_NeoPixel(4, 10, NEO_GRB + NEO_KHZ800), // driver side taillight
+    Adafruit_NeoPixel(4, 11, NEO_GRB + NEO_KHZ800), // passenger side taillight
+};
+
 #ifdef __AVR__
  #include <avr/power.h> // Required for 16 MHz Adafruit Trinket
 #endif
 
-#define LED_PIN    9
-#define LED_COUNT 7
-
-Adafruit_NeoPixel strip(LED_COUNT, LED_PIN, NEO_GRB + NEO_KHZ800);
 
 enum LED_STATE {
   RISE, 
@@ -19,6 +23,11 @@ enum LED_STATE {
   FALL, 
   ON_MIN
 };
+
+/*!
+    @brief   Class that stores state and functions for controlling the rise/fall
+             time and brightness of a NeoPixel.
+*/
 class LedControl {
 private:
     int ledNum;
@@ -30,14 +39,28 @@ private:
     millisDelay onMaxDelay;
     millisDelay onMinDelay;
     LED_STATE ledState;
+    Adafruit_NeoPixel stripNum;
     double hueVal;
     double saturationVal;
     bool running;
   
 public:
-    // allows control for an individual led
-    LedControl(int n, int brightness_max, int brightness_min, int delay_on, int delay_off, int delay_pulse, int start_brightness, double hue, double saturation)
-      : ledNum(n), maxBrightness(brightness_max), minBrightness(brightness_min), ledState(RISE), currentBrightness(start_brightness), hueVal(hue), saturationVal(saturation), running(true) {
+    /*!
+    @brief   Class that stores state and functions for controlling the rise/fall
+             time and brightness of a NeoPixel.
+    @param   strip              The name of the strip to be affected
+    @param   n                  The index of the LED to be modified (starts at 0)
+    @param   brightness_max     The maximum brightness the LED can achieve (0 to 255)
+    @param   brightness_min     The minimum brightness the LED can achieve (0 to 255)
+    @param   delay_on           Time the LED stays at its maximum brightness (in milliseconds)
+    @param   delay_off          Time the LED stays at its minimum brightness (in milliseconds)
+    @param   delay_pulse        Time it takes the LED to bright/dim completely (in milliseconds)
+    @param   start_brightness   The initial brightness that the LED starts with (0 to 255)
+    @param   hue                In reference to the Hue, Saturation, and Value color model (0 to 360 degrees)
+    @param   saturation         In reference to the Hue, Saturation, and Value color model (0 to 100 percent)
+    */
+    LedControl(Adafruit_NeoPixel strip, int n, int brightness_max, int brightness_min, int delay_on, int delay_off, int delay_pulse, int start_brightness, double hue, double saturation)
+      : stripNum(strip), ledNum(n), maxBrightness(brightness_max), minBrightness(brightness_min), ledState(RISE), currentBrightness(start_brightness), hueVal(hue), saturationVal(saturation), running(true) {
         
         int totalSteps = maxBrightness - minBrightness; // Calculate total number of brightness steps
         stepDelay = delay_pulse / totalSteps;           // Calculate delay for each step
@@ -86,8 +109,8 @@ public:
                 break;
         }
 
-        uint32_t color = strip.gamma32(strip.ColorHSV((hueVal/360.0)*65536.0, (saturationVal/100.0)*255.0, currentBrightness));
-        strip.setPixelColor(ledNum, color);
+        uint32_t color = stripNum.gamma32(stripNum.ColorHSV((hueVal/360.0)*65536.0, (saturationVal/100.0)*255.0, currentBrightness));
+        stripNum.setPixelColor(ledNum, color);
     }
 
     void start() {
@@ -108,6 +131,10 @@ public:
 
 };
 
+/*!
+    @brief   Class that contains functions to simulate the light emitted from a rotator
+             using a series of desired LEDs
+*/
 class LedRotator {
 private:
 int ledNum;
@@ -119,10 +146,22 @@ int ledNum;
     double rotatorPosDeg;
     double rotatorPosRad;
     millisDelay revolutionDelay;
+    Adafruit_NeoPixel stripNum;
 
 public:
-    LedRotator(int n, int brightness_max, int delay_revolution, int hue)
-        : ledNum(n), maxBrightness(brightness_max), hueVal(hue), rotatorPosDeg(0.0) {
+    /*!
+    @brief   Class that contains functions to simulate the light emitted from a rotator
+             using a series of desired LEDs.
+    @param   strip              The name of the strip to be affected
+    @param   n                  The starting LED index of the strip (starts at 0)
+    @param   brightness_max     The maximum brightness the LED can achieve (0 to 255)
+    @param   delay_revolution   Time to complete one revolution (in milliseconds)
+    @param   hue                In reference to the Hue, Saturation, and Value color model (0 to 360 degrees)
+    @note    There is no ability to change the number of LED's to simulate the rotator. As it stands now, 
+             only four LED's are being used.
+    */
+    LedRotator(Adafruit_NeoPixel strip, int n, int brightness_max, int delay_revolution, int hue)
+        : stripNum(strip), ledNum(n), maxBrightness(brightness_max), hueVal(hue), rotatorPosDeg(0.0) {
         
         stepDelay = delay_revolution/360;
         revolutionDelay.start(stepDelay);
@@ -140,8 +179,8 @@ public:
 
             for (int i = 0; i < 4; i++) {
                 ledBrightness[i] = (ledBrightness[i] < 0) ? 0 : ledBrightness[i];
-                ledColor[i] = strip.gamma32(strip.ColorHSV((hueVal/360.0)*65536.0, 255, ledBrightness[i]));
-                strip.setPixelColor(ledNum+i, ledColor[i]);
+                ledColor[i] = stripNum.gamma32(stripNum.ColorHSV((hueVal/360.0)*65536.0, 255, ledBrightness[i]));
+                stripNum.setPixelColor(ledNum+i, ledColor[i]);
             }
 
             rotatorPosDeg = (rotatorPosDeg > 359.0) ? 0.0 : rotatorPosDeg;
@@ -153,5 +192,6 @@ public:
     }
     
 };
+
 
 #endif
